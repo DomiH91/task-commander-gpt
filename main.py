@@ -7,6 +7,11 @@ app = FastAPI()
 
 TODOIST_TOKEN = "067a491221f78bb9d45b8e30f275399f5c932652"  # Nur lokal – später via secrets/env
 
+# Root health check endpoint
+@app.get("/")
+def root():
+    return {"status": "alive"}
+
 class CompleteTaskInput(BaseModel):
     task_id: str
     comment: str = ""
@@ -29,7 +34,6 @@ def get_tasks():
         raise HTTPException(status_code=500, detail="Failed to fetch tasks")
 
     tasks = response.json()
-    # Basic enrichment: Dummy tags for demo
     enriched = []
     for t in tasks:
         tags = []
