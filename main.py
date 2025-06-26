@@ -5,9 +5,9 @@ import requests
 
 app = FastAPI()
 
-TODOIST_TOKEN = "067a491221f78bb9d45b8e30f275399f5c932652"  # Nur lokal – später via secrets/env
+TODOIST_TOKEN = "067a491221f78bb9d45b8e30f275399f5c932652"  # Lokal, später via env
 
-# Root health check endpoint
+# Health check/root endpoint
 @app.get("/")
 def root():
     return {"status": "alive"}
@@ -29,7 +29,6 @@ def init_menu():
 def get_tasks():
     headers = {"Authorization": f"Bearer {TODOIST_TOKEN}"}
     response = requests.get("https://api.todoist.com/rest/v2/tasks", headers=headers)
-
     if response.status_code != 200:
         raise HTTPException(status_code=500, detail="Failed to fetch tasks")
 
@@ -41,10 +40,11 @@ def get_tasks():
             tags.append("has_due")
         if "review" in t["content"].lower():
             tags.append("DeepWork")
+        due_info = t.get("due") or {}
         enriched.append({
             "id": t["id"],
             "content": t["content"],
-            "due": t.get("due", {}).get("date"),
+            "due": due_info.get("date"),
             "tags": tags
         })
 
