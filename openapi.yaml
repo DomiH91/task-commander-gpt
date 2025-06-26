@@ -4,7 +4,7 @@ info:
   description: API interface for bi-directional Todoist task management.
   version: 1.0.0
 servers:
-  - url: https://<DEIN-RENDER-URL>
+- url: https://task-commander-gpt.onrender.com
 
 paths:
   /init_menu:
