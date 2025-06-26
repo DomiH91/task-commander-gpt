@@ -1,0 +1,99 @@
+openapi: 3.1.0
+info:
+  title: Task Commander API
+  description: API interface for bi-directional Todoist task management.
+  version: 1.0.0
+servers:
+  - url: https://<DEIN-RENDER-URL>
+
+paths:
+  /init_menu:
+    get:
+      summary: Returns the main Task Commander menu
+      operationId: initMenu
+      responses:
+        '200':
+          description: Menu options
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StartMenu'
+
+  /get_tasks:
+    get:
+      summary: Fetch open tasks from Todoist
+      operationId: getTasks
+      responses:
+        '200':
+          description: List of open tasks
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TasksResponse'
+
+  /complete_task:
+    post:
+      summary: Mark task as complete in Todoist
+      operationId: completeTask
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CompleteTaskInput'
+      responses:
+        '200':
+          description: Confirmation of completion
+
+  /add_task:
+    post:
+      summary: Add a new task to Todoist
+      operationId: addTask
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddTaskInput'
+      responses:
+        '200':
+          description: Task created
+
+components:
+  schemas:
+    StartMenu:
+      type: object
+      properties:
+        options:
+          type: array
+          items:
+            type: string
+          example: ["top3_focus", "full_overview", "complete_task", "add_task"]
+
+    TasksResponse:
+      type: object
+      properties:
+        tasks:
+          type: array
+          items:
+            type: object
+            properties:
+              id: { type: string }
+              content: { type: string }
+              due: { type: string, nullable: true }
+              tags: { type: array, items: { type: string } }
+
+    CompleteTaskInput:
+      type: object
+      properties:
+        task_id:
+          type: string
+        comment:
+          type: string
+
+    AddTaskInput:
+      type: object
+      properties:
+        content: { type: string }
+        due_string: { type: string }
+        project_id: { type: string }
