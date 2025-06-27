@@ -1,16 +1,17 @@
 openapi: 3.1.0
 info:
   title: Task Commander API
-  description: API interface for bi-directional Todoist task management.
   version: 1.0.0
 servers:
-- url: https://task-commander-gpt.onrender.com
+  - url: https://task-commander-gpt.onrender.com
 
 paths:
   /init_menu:
     get:
       summary: Returns the main Task Commander menu
       operationId: initMenu
+      security:
+        - BearerAuth: []
       responses:
         '200':
           description: Menu options
@@ -23,6 +24,8 @@ paths:
     get:
       summary: Fetch open tasks from Todoist
       operationId: getTasks
+      security:
+        - BearerAuth: []
       responses:
         '200':
           description: List of open tasks
@@ -35,6 +38,8 @@ paths:
     post:
       summary: Mark task as complete in Todoist
       operationId: completeTask
+      security:
+        - BearerAuth: []
       requestBody:
         required: true
         content:
@@ -49,6 +54,8 @@ paths:
     post:
       summary: Add a new task to Todoist
       operationId: addTask
+      security:
+        - BearerAuth: []
       requestBody:
         required: true
         content:
@@ -59,7 +66,27 @@ paths:
         '200':
           description: Task created
 
+  /get_projects:
+    get:
+      summary: Fetch your Todoist projects
+      operationId: getProjects
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: List of projects
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectsResponse'
+
 components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
   schemas:
     StartMenu:
       type: object
@@ -68,7 +95,12 @@ components:
           type: array
           items:
             type: string
-          example: ["top3_focus", "full_overview", "complete_task", "add_task"]
+          example:
+            - top3_focus
+            - full_overview
+            - complete_task
+            - add_task
+            - get_projects
 
     TasksResponse:
       type: object
@@ -78,22 +110,43 @@ components:
           items:
             type: object
             properties:
-              id: { type: string }
+              id:      { type: string }
               content: { type: string }
-              due: { type: string, nullable: true }
-              tags: { type: array, items: { type: string } }
+              due:     { type: string, nullable: true }
+              tags:
+                type: array
+                items: { type: string }
 
     CompleteTaskInput:
       type: object
+      required:
+        - task_id
       properties:
-        task_id:
-          type: string
-        comment:
-          type: string
+        task_id: { type: string }
+        comment: { type: string }
 
     AddTaskInput:
       type: object
+      required:
+        - content
+        - due_string
       properties:
-        content: { type: string }
+        content:    { type: string }
         due_string: { type: string }
-        project_id: { type: string }
+        project_id:
+          type: string
+          nullable: true
+        project_name:
+          type: string
+          nullable: true
+
+    ProjectsResponse:
+      type: object
+      properties:
+        projects:
+          type: array
+          items:
+            type: object
+            properties:
+              id:   { type: string }
+              name: { type: string }
