@@ -84,9 +84,9 @@ def add_task(data: AddTaskInput):
 
     # resolve project_id by name if necessary
     if not data.project_id and data.project_name:
-        resp = requests.get("https://api.todoist.com/rest/v2/projects", headers=headers)
-        resp.raise_for_status()
-        match = next((p for p in resp.json() if p["name"].lower() == data.project_name.lower()), None)
+        proj_resp = requests.get("https://api.todoist.com/rest/v2/projects", headers=headers)
+        proj_resp.raise_for_status()
+        match = next((p for p in proj_resp.json() if p["name"].lower() == data.project_name.lower()), None)
         if not match:
             raise HTTPException(status_code=400, detail=f"Project '{data.project_name}' not found")
         project_id = match["id"]
