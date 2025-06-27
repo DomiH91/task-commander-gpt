@@ -1,7 +1,7 @@
 # Force redeploy marker
 import os
 from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, root_validator
 import requests
 
 app = FastAPI()
@@ -21,7 +21,14 @@ class CompleteTaskInput(BaseModel):
 class AddTaskInput(BaseModel):
     content: str
     due_string: str
-    project_id: str
+    project_id: str | None = None
+    project_name: str | None = None
+
+    @root_validator
+    def require_one_project_identifier(cls, values):
+        if not (values.get("project_id") or values.get("project_name")):
+            raise ValueError("Either project_id or project_name must be provided")
+        return values
 
 @app.get("/init_menu")
 def init_menu():
@@ -30,11 +37,10 @@ def init_menu():
 @app.get("/get_tasks")
 def get_tasks():
     headers = {"Authorization": f"Bearer {TODOIST_TOKEN}"}
-    response = requests.get("https://api.todoist.com/rest/v2/tasks", headers=headers)
-    if response.status_code != 200:
+    resp = requests.get("https://api.todoist.com/rest/v2/tasks", headers=headers)
+    if resp.status_code != 200:
         raise HTTPException(status_code=500, detail="Failed to fetch tasks")
-
-    tasks = response.json()
+    tasks = resp.json()
     enriched = []
     for t in tasks:
         tags = []
@@ -49,37 +55,8 @@ def get_tasks():
             "due": due_info.get("date"),
             "tags": tags
         })
-
     return {"tasks": enriched}
 
-@app.post("/complete_task")
-def complete_task(data: CompleteTaskInput):
-    headers = {"Authorization": f"Bearer {TODOIST_TOKEN}"}
-    response = requests.post(
-        f"https://api.todoist.com/rest/v2/tasks/{data.task_id}/close",
-        headers=headers
-    )
-    if response.status_code != 204:
-        raise HTTPException(status_code=500, detail="Failed to close task")
-    return {"status": "completed", "task_id": data.task_id}
-
-@app.post("/add_task")
-def add_task(data: AddTaskInput):
-    headers = {
-        "Authorization": f"Bearer {TODOIST_TOKEN}",
-        "Content-Type": "application/json"
-    }
-    payload = {
-        "content": data.content,
-        "due_string": data.due_string,
-        "project_id": data.project_id
-    }
-    response = requests.post("https://api.todoist.com/rest/v2/tasks", json=payload, headers=headers)
-    if response.status_code != 200:
-        raise HTTPException(status_code=500, detail="Failed to create task")
-    return response.json()
-
-# New: Fetch Todoist projects for selection in add_task
 @app.get("/get_projects")
 def get_projects():
     headers = {"Authorization": f"Bearer {TODOIST_TOKEN}"}
@@ -88,3 +65,39 @@ def get_projects():
         raise HTTPException(status_code=500, detail="Failed to fetch projects")
     projs = resp.json()
     return {"projects": [{"id": p["id"], "name": p["name"]} for p in projs]}
+
+@app.post("/complete_task")
+def complete_task(data: CompleteTaskInput):
+    headers = {"Authorization": f"Bearer {TODOIST_TOKEN}"}
+    resp = requests.post(
+        f"https://api.todoist.com/rest/v2/tasks/{data.task_id}/close",
+        headers=headers
+    )
+    if resp.status_code != 204:
+        raise HTTPException(status_code=500, detail="Failed to close task")
+    return {"status": "completed", "task_id": data.task_id}
+
+@app.post("/add_task")
+def add_task(data: AddTaskInput):
+    headers = {"Authorization": f"Bearer {TODOIST_TOKEN}", "Content-Type": "application/json"}
+
+    # resolve project_id by name if necessary
+    if not data.project_id and data.project_name:
+        resp = requests.get("https://api.todoist.com/rest/v2/projects", headers=headers)
+        resp.raise_for_status()
+        match = next((p for p in resp.json() if p["name"].lower() == data.project_name.lower()), None)
+        if not match:
+            raise HTTPException(status_code=400, detail=f"Project '{data.project_name}' not found")
+        project_id = match["id"]
+    else:
+        project_id = data.project_id
+
+    payload = {
+        "content": data.content,
+        "due_string": data.due_string,
+        "project_id": project_id
+    }
+    resp = requests.post("https://api.todoist.com/rest/v2/tasks", json=payload, headers=headers)
+    if resp.status_code != 200:
+        raise HTTPException(status_code=500, detail="Failed to create task")
+    return resp.json()
