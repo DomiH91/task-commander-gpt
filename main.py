@@ -1,12 +1,13 @@
 # Force redeploy marker
 import os
 from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel, root_validator
+from pydantic import BaseModel
+from pydantic.functional_validators import model_validator
 import requests
 
 app = FastAPI()
 
-# TOKEN via ENV, fallback to your dev token
+# TOKEN via ENV, fallback to dev token
 TODOIST_TOKEN = os.getenv("TODOIST_TOKEN", "067a491221f78bb9d45b8e30f275399f5c932652")
 
 # Health check/root endpoint
@@ -24,11 +25,11 @@ class AddTaskInput(BaseModel):
     project_id: str | None = None
     project_name: str | None = None
 
-    @root_validator
-    def require_one_project_identifier(cls, values):
-        if not (values.get("project_id") or values.get("project_name")):
+    @model_validator(mode="after")
+    def check_project_identifier(cls, model):
+        if not (model.project_id or model.project_name):
             raise ValueError("Either project_id or project_name must be provided")
-        return values
+        return model
 
 @app.get("/init_menu")
 def init_menu():
