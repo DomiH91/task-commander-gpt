@@ -26,6 +26,22 @@ paths:
       operationId: getTasks
       security:
         - BearerAuth: []
+      parameters:
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 50
+            minimum: 1
+            maximum: 200
+          description: Number of tasks to return
+        - in: query
+          name: offset
+          schema:
+            type: integer
+            default: 0
+            minimum: 0
+          description: Pagination offset
       responses:
         '200':
           description: List of open tasks
@@ -125,6 +141,12 @@ components:
                 type: array
                 items:
                   type: string
+        offset:
+          type: integer
+          description: Current pagination offset
+        limit:
+          type: integer
+          description: Current pagination limit
 
     CompleteTaskInput:
       type: object
@@ -140,11 +162,8 @@ components:
       type: object
       required:
         - content
-        - due_string
       properties:
         content:
-          type: string
-        due_string:
           type: string
         project_id:
           type: string
@@ -152,10 +171,20 @@ components:
         project_name:
           type: string
           nullable: true
+        due_string:
+          type: string
+          nullable: true
+          description: A natural-language due date
         duration_minutes:
           type: integer
           nullable: true
           description: Estimated effort in minutes
+      oneOf:
+        - required: ["due_string"]
+        - required: ["duration_minutes"]
+      description: |
+        Wenn kein due_string angegeben wird, muss duration_minutes gesetzt sein, 
+        um die Eisenhower-Planung zu ermöglichen.
 
     ProjectsResponse:
       type: object
