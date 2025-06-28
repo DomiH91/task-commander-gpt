@@ -7,10 +7,8 @@ import requests
 
 app = FastAPI()
 
-# TOKEN via ENV, fallback to dev token
-TODOIST_TOKEN = os.getenv("TODOIST_TOKEN", "067a491221f78bb9d45b8e30f275399f5c932652")
+TODOIST_TOKEN = os.getenv("TODOIST_TOKEN", "…fallback token…")
 
-# Health check/root endpoint
 @app.get("/")
 def root():
     return {"status": "alive"}
@@ -24,6 +22,7 @@ class AddTaskInput(BaseModel):
     due_string: str
     project_id: str | None = None
     project_name: str | None = None
+    duration_minutes: int | None = None
 
     @model_validator(mode="after")
     def check_project_identifier(cls, model):
@@ -54,6 +53,7 @@ def get_tasks():
             "id": t["id"],
             "content": t["content"],
             "due": due_info.get("date"),
+            "duration_minutes": None,
             "tags": tags
         })
     return {"tasks": enriched}
@@ -82,7 +82,7 @@ def complete_task(data: CompleteTaskInput):
 def add_task(data: AddTaskInput):
     headers = {"Authorization": f"Bearer {TODOIST_TOKEN}", "Content-Type": "application/json"}
 
-    # resolve project_id by name if necessary
+    # resolve project_id by name
     if not data.project_id and data.project_name:
         proj_resp = requests.get("https://api.todoist.com/rest/v2/projects", headers=headers)
         proj_resp.raise_for_status()
@@ -96,7 +96,8 @@ def add_task(data: AddTaskInput):
     payload = {
         "content": data.content,
         "due_string": data.due_string,
-        "project_id": project_id
+        "project_id": project_id,
+        "duration_minutes": data.duration_minutes
     }
     resp = requests.post("https://api.todoist.com/rest/v2/tasks", json=payload, headers=headers)
     if resp.status_code != 200:
