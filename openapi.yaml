@@ -110,20 +110,31 @@ components:
           items:
             type: object
             properties:
-              id:      { type: string }
-              content: { type: string }
-              due:     { type: string, nullable: true }
+              id:
+                type: string
+              content:
+                type: string
+              due:
+                type: string
+                nullable: true
+              duration_minutes:
+                type: integer
+                nullable: true
+                description: Estimated effort in minutes
               tags:
                 type: array
-                items: { type: string }
+                items:
+                  type: string
 
     CompleteTaskInput:
       type: object
       required:
         - task_id
       properties:
-        task_id: { type: string }
-        comment: { type: string }
+        task_id:
+          type: string
+        comment:
+          type: string
 
     AddTaskInput:
       type: object
@@ -131,14 +142,20 @@ components:
         - content
         - due_string
       properties:
-        content:    { type: string }
-        due_string: { type: string }
+        content:
+          type: string
+        due_string:
+          type: string
         project_id:
           type: string
           nullable: true
         project_name:
           type: string
           nullable: true
+        duration_minutes:
+          type: integer
+          nullable: true
+          description: Estimated effort in minutes
 
     ProjectsResponse:
       type: object
@@ -148,5 +165,7 @@ components:
           items:
             type: object
             properties:
-              id:   { type: string }
-              name: { type: string }
+              id:
+                type: string
+              name:
+                type: string
