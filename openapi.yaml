@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Task Commander API
-  version: 1.0.0
+  version: 1.1.0
 servers:
   - url: https://task-commander-gpt.onrender.com
 
@@ -82,6 +82,38 @@ paths:
         '200':
           description: Task created
 
+  /quick_add:
+    post:
+      summary: Quick Add — nur Task‑Name, landet in Inbox
+      operationId: quickAddTask
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/QuickAddInput'
+      responses:
+        '200':
+          description: Task created in Inbox project
+
+  /update_task:
+    patch:
+      summary: Update existing task (Due, Duration, Project, Content)
+      operationId: updateTask
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateTaskInput'
+      responses:
+        '200':
+          description: Task updated
+
   /get_projects:
     get:
       summary: Fetch your Todoist projects
@@ -116,6 +148,7 @@ components:
             - full_overview
             - complete_task
             - add_task
+            - quick_add
             - get_projects
 
     TasksResponse:
@@ -174,7 +207,7 @@ components:
         due_string:
           type: string
           nullable: true
-          description: A natural-language due date
+          description: A natural‑language due date
         duration_minutes:
           type: integer
           nullable: true
@@ -183,8 +216,43 @@ components:
         - required: ["due_string"]
         - required: ["duration_minutes"]
       description: |
-        Wenn kein due_string angegeben wird, muss duration_minutes gesetzt sein, 
-        um die Eisenhower-Planung zu ermöglichen.
+        Intake-Regel: Wenn kein due_string angegeben wird, muss duration_minutes gesetzt sein,
+        um Eisenhower-Planung & Scheduling zu ermöglichen.
+
+    QuickAddInput:
+      type: object
+      required:
+        - content
+      properties:
+        content:
+          type: string
+      description: >
+        Quick Add: spontane Einfälle ohne Zeit-/Projektangabe, landen in Inbox.
+
+    UpdateTaskInput:
+      type: object
+      required:
+        - task_id
+      properties:
+        task_id:
+          type: string
+        content:
+          type: string
+          nullable: true
+        project_id:
+          type: string
+          nullable: true
+        project_name:
+          type: string
+          nullable: true
+        due_string:
+          type: string
+          nullable: true
+        duration_minutes:
+          type: integer
+          nullable: true
+      description: >
+        Ermöglicht nachträgliches Ergänzen/Anpassen von Task-Feldern
 
     ProjectsResponse:
       type: object
