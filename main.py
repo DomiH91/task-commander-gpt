@@ -89,7 +89,7 @@ def get_tasks(limit: int = 50, offset: int = 0):
             "content": t["content"],
             "due": t.get("due", {}).get("date"),
             "duration_minutes": None,
-            "tags": tags
+            "tags": tags,
             "needs_scheduling": not t.get("due") and not t.get("duration_minutes")   
         })
     return {"tasks": enriched, "limit": limit, "offset": offset}
