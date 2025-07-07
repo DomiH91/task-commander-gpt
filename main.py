@@ -161,3 +161,27 @@ def update_task(data: UpdateTaskInput):
     if resp.status_code not in (200,204):
         raise HTTPException(status_code=500, detail="Fehler beim Aktualisieren")
     return {"status": "updated", **payload}
+
+@app.get("/get_tasks_needing_schedule")
+def get_tasks_needing_schedule():
+    resp = requests.get(
+        "https://api.todoist.com/rest/v2/tasks",
+        headers=HEADERS,
+        timeout=5
+    )
+    if resp.status_code != 200:
+        raise HTTPException(status_code=500, detail="Fehler beim Laden der Aufgaben")
+
+    tasks = resp.json()
+    filtered = []
+    for t in tasks:
+        if not t.get("due"):
+            filtered.append({
+                "id": t["id"],
+                "content": t["content"],
+                "due": None,
+                "duration_minutes": None,
+                "tags": [],
+                "needs_scheduling": True
+            })
+    return {"tasks": filtered}
