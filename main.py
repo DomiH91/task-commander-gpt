@@ -62,6 +62,7 @@ def init_menu():
             "complete_task",
             "add_task",
             "quick_add",
+            "plan_task",
             "update_task",
             "get_projects"
         ]

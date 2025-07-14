@@ -128,6 +128,20 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProjectsResponse'
 
+  /plan_tasks:
+    get:
+      summary: Zeigt alle Aufgaben ohne Due/Duration zur Planung
+      operationId: planTasks
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Liste der zu planenden Tasks
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TasksResponse'
+        
 components:
   securitySchemes:
     BearerAuth:
@@ -150,6 +164,8 @@ components:
             - add_task
             - quick_add
             - get_projects
+            - plan_tasks
+            - update_task
 
     TasksResponse:
       type: object
@@ -174,6 +190,9 @@ components:
                 type: array
                 items:
                   type: string
+              needs_scheduling:
+                type: boolean
+                description: True, wenn weder due_string noch duration gesetzt sind    
         offset:
           type: integer
           description: Current pagination offset
