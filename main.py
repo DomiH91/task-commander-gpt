@@ -88,7 +88,7 @@ def get_tasks(limit: int = 50, offset: int = 0):
         enriched.append({
             "id": t["id"],
             "content": t["content"],
-            "due": t.get("due", {}).get("date"),
+            "due": t["due"]["date"] if t.get("due") else None,
             "duration_minutes": None,
             "tags": tags,
             "needs_scheduling": not t.get("due")  
