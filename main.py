@@ -62,7 +62,7 @@ def init_menu():
             "complete_task",
             "add_task",
             "quick_add",
-            "plan_task",
+            "plan_tasks",
             "update_task",
             "get_projects"
         ]
@@ -163,7 +163,7 @@ def update_task(data: UpdateTaskInput):
         raise HTTPException(status_code=500, detail="Fehler beim Aktualisieren")
     return {"status": "updated", **payload}
 
-@app.get("/plan_task")
+@app.get("/plan_tasks")
 def get_tasks_needing_schedule():
     resp = requests.get(
         "https://api.todoist.com/rest/v2/tasks",
