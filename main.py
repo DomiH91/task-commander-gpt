@@ -163,7 +163,7 @@ def update_task(data: UpdateTaskInput):
         raise HTTPException(status_code=500, detail="Fehler beim Aktualisieren")
     return {"status": "updated", **payload}
 
-@app.get("/get_tasks_needing_schedule")
+@app.get("/plan_task")
 def get_tasks_needing_schedule():
     resp = requests.get(
         "https://api.todoist.com/rest/v2/tasks",
