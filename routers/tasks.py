@@ -603,21 +603,15 @@ def prioritized_tasks(limit: int = 5):
         "scoring_logic": "impact +3, due today +3, due<3d +2, prio 4 +2, quick +1, private -2 (wenn nicht today)"
     }
 
-
 from fastapi import HTTPException
 from datetime import datetime
-from routers.tasks import (
-    prioritized_tasks,
-    review_batch,
-    get_tasks_needing_schedule
-)
 
 @router.get("/commander_dashboard")
 def commander_dashboard(limit: int = 5):
     try:
-        # Direkte Funktionsaufrufe statt HTTP‑Requests
+        # direkt auf unsere internen Funktionen zugreifen
         top_tasks    = prioritized_tasks(limit)["prioritized"]
-        review_needs = review_batch(size=limit)["review_batch"]
+        review_needs = review_batch(limit)["review_batch"]
         unplanned    = get_tasks_needing_schedule()["tasks"]
 
         return {
@@ -632,4 +626,4 @@ def commander_dashboard(limit: int = 5):
             }
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Commander‑Dashboard Fehler: {e}")
+        raise HTTPException(status_code=500, detail=f"Commander-Dashboard Fehler: {e}")
