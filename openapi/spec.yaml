@@ -1,0 +1,653 @@
+openapi: 3.1.0
+info:
+  title: Task Commander API
+  version: 1.2.0
+servers:
+  - url: https://task-commander-gpt.onrender.com
+
+paths:
+  /init_menu:
+    get:
+      summary: Returns the main Task Commander menu
+      operationId: initMenu
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Menu options
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StartMenu'
+
+  /get_tasks:
+    get:
+      summary: Fetch open tasks from Todoist
+      operationId: getTasks
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 50
+            minimum: 1
+            maximum: 200
+        - in: query
+          name: offset
+          schema:
+            type: integer
+            default: 0
+            minimum: 0
+      responses:
+        '200':
+          description: List of open tasks
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TasksResponse'
+
+  /complete_task:
+    post:
+      summary: Mark task as complete in Todoist
+      operationId: completeTask
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CompleteTaskInput'
+      responses:
+        '200':
+          description: Confirmation of completion
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                  task_id:
+                    type: string
+
+  /add_task:
+    post:
+      summary: Add a new task to Todoist
+      operationId: addTask
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddTaskInput'
+      responses:
+        '200':
+          description: Task created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskItem'
+
+  /quick_add:
+    post:
+      summary: Quick Add — nur Task‑Name, landet in Inbox
+      operationId: quickAddTask
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/QuickAddInput'
+      responses:
+        '200':
+          description: Task created in Inbox project
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskItem'
+
+  /update_task:
+    patch:
+      summary: Update existing task (Due, Duration, Project, Content)
+      operationId: updateTask
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateTaskInput'
+      responses:
+        '200':
+          description: Task updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                  task_id:
+                    type: string
+                  changes:
+                    type: object
+
+  /get_projects:
+    get:
+      summary: Fetch your Todoist projects
+      operationId: getProjects
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: List of projects
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectsResponse'
+
+  /plan_tasks:
+    get:
+      summary: Show tasks without due/duration for scheduling
+      operationId: planTasks
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Tasks needing schedule
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TasksResponse'
+
+  /task_diagnostics:
+    get:
+      summary: Diagnose your own tasks
+      operationId: taskDiagnostics
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Diagnostics results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DiagnosticsResponse'
+
+  /cleanup_recommendations:
+    get:
+      summary: Suggest cleanup updates for tasks
+      operationId: cleanupRecommendations
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Cleanup recommendations
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CleanupResponse'
+
+  /review_batch:
+    get:
+      summary: Get a batch of cleanup suggestions for review
+      operationId: reviewBatch
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: query
+          name: size
+          schema:
+            type: integer
+            default: 5
+      responses:
+        '200':
+          description: Review batch
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReviewBatchResponse'
+
+  /execute_review_response:
+    post:
+      summary: Execute user’s review responses
+      operationId: executeReviewResponse
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExecuteReviewInput'
+      responses:
+        '200':
+          description: Results of review execution
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  executed:
+                    type: array
+                  skipped:
+                    type: array
+                  errors:
+                    type: object
+
+  /focus_session:
+    get:
+      summary: Start a focus session
+      operationId: focusSession
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 3
+      responses:
+        '200':
+          description: Focus tasks
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TasksResponse'
+
+  /label_recommendations:
+    get:
+      summary: Generate label recommendations
+      operationId: labelRecommendations
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Label suggestions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LabelRecommendationsResponse'
+
+  /accept_label_recommendations:
+    post:
+      summary: Accept label recommendations
+      operationId: acceptLabelRecommendations
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AcceptLabelsInput'
+      responses:
+        '200':
+          description: Label acceptance summary
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  total_accepted:
+                    type: integer
+                  total_skipped:
+                    type: integer
+                  total_failed:
+                    type: integer
+
+  /prioritized_tasks:
+    get:
+      summary: Fetch prioritized tasks
+      operationId: prioritizedTasks
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 5
+      responses:
+        '200':
+          description: Prioritized tasks
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PrioritizedResponse'
+
+  /commander_dashboard:
+    get:
+      summary: Commander dashboard overview
+      operationId: commanderDashboard
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 5
+      responses:
+        '200':
+          description: Dashboard data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DashboardResponse'
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+
+  schemas:
+    StartMenu:
+      type: object
+      properties:
+        options:
+          type: array
+          items:
+            type: string
+
+    TaskItem:
+      type: object
+      properties:
+        id:
+          type: string
+        content:
+          type: string
+        due:
+          type: string
+          nullable: true
+        duration_minutes:
+          type: integer
+          nullable: true
+        labels:
+          type: array
+          items:
+            type: string
+        needs_scheduling:
+          type: boolean
+
+    TasksResponse:
+      type: object
+      properties:
+        tasks:
+          type: array
+          items:
+            $ref: '#/components/schemas/TaskItem'
+        offset:
+          type: integer
+        limit:
+          type: integer
+
+    ProjectItem:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+
+    ProjectsResponse:
+      type: object
+      properties:
+        projects:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProjectItem'
+
+    CompleteTaskInput:
+      type: object
+      required:
+        - task_id
+      properties:
+        task_id:
+          type: string
+        comment:
+          type: string
+
+    AddTaskInput:
+      type: object
+      required:
+        - content
+      properties:
+        content:
+          type: string
+        project_id:
+          type: string
+          nullable: true
+        project_name:
+          type: string
+          nullable: true
+        due_string:
+          type: string
+          nullable: true
+        duration_minutes:
+          type: integer
+          nullable: true
+
+    QuickAddInput:
+      type: object
+      required:
+        - content
+      properties:
+        content:
+          type: string
+
+    UpdateTaskInput:
+      type: object
+      required:
+        - task_id
+      properties:
+        task_id:
+          type: string
+        content:
+          type: string
+          nullable: true
+        project_id:
+          type: string
+          nullable: true
+        project_name:
+          type: string
+          nullable: true
+        due_string:
+          type: string
+          nullable: true
+        duration_minutes:
+          type: integer
+          nullable: true
+
+    DiagnosticsResponse:
+      type: object
+      properties:
+        diagnostics:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+              content:
+                type: string
+              issues:
+                type: array
+                items:
+                  type: string
+              suggested_label:
+                type: string
+                nullable: true
+        summary:
+          type: object
+          properties:
+            total_checked:
+              type: integer
+            with_issues:
+              type: integer
+        action_tips:
+          type: array
+          items:
+            type: string
+
+    CleanupResponse:
+      type: object
+      properties:
+        suggested_updates:
+          type: array
+          items:
+            type: object
+            properties:
+              task_id:
+                type: string
+              content:
+                type: string
+              missing:
+                type: array
+                items:
+                  type: string
+              suggested_update:
+                type: object
+        summary:
+          type: object
+          properties:
+            total_analyzed:
+              type: integer
+            recommendations:
+              type: integer
+        next_action:
+          type: string
+
+    ReviewBatchResponse:
+      type: object
+      properties:
+        review_batch:
+          type: array
+          items:
+            type: object
+            properties:
+              task_id:
+                type: string
+              content:
+                type: string
+              missing:
+                type: array
+                items:
+                  type: string
+              suggested_update:
+                type: object
+        instruction:
+          type: string
+
+    ExecuteReviewInput:
+      type: object
+      required:
+        - review_batch
+        - response
+      properties:
+        review_batch:
+          type: array
+          items:
+            type: object
+        response:
+          type: string
+
+    LabelRecommendationsResponse:
+      type: object
+      properties:
+        recommendations:
+          type: array
+          items:
+            type: object
+            properties:
+              task_id:
+                type: string
+              content:
+                type: string
+              suggested_label:
+                type: string
+        total_suggested:
+          type: integer
+
+    AcceptLabelsInput:
+      type: object
+      required:
+        - accept
+      properties:
+        accept:
+          oneOf:
+            - type: string
+            - type: array
+              items:
+                type: string
+
+    PrioritizedResponse:
+      type: object
+      properties:
+        prioritized:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+              content:
+                type: string
+              score:
+                type: integer
+              priority:
+                type: integer
+              due:
+                type: object
+              labels:
+                type: array
+                items:
+                  type: string
+              reason:
+                type: array
+                items:
+                  type: string
+        total_eligible:
+          type: integer
+
+    DashboardResponse:
+      type: object
+      properties:
+        date:
+          type: string
+        top_tasks:
+          type: array
+          items:
+            $ref: '#/components/schemas/PrioritizedResponse'
+        review_needs:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReviewBatchResponse'
+        unplanned_tasks:
+          type: array
+          items:
+            $ref: '#/components/schemas/TaskItem'
+        slot_suggestions:
+          type: object
+          properties:
+            deep_work:
+              type: array
+              items:
+                type: string
+            quick_wins:
+              type: array
+              items:
+                type: string
+            today_focus:
+              type: array
+              items:
+                type: string
