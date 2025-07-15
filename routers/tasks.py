@@ -157,7 +157,7 @@ def get_tasks_needing_schedule():
     return {"tasks": unplanned, "total": len(unplanned)}
 
 
-@router.post("/update_task")
+@router.patch("/update_task")
 def update_task(data: UpdateTaskInput):
     payload: dict = {}
     if data.content is not None:
@@ -199,6 +199,12 @@ def update_task(data: UpdateTaskInput):
     if resp.status_code not in (200, 204):
         raise HTTPException(status_code=500, detail=f"Update fehlgeschlagen ({resp.status_code})")
     return {"status": "updated", "task_id": data.task_id, "changes": payload}
+
+@router.get("/get_projects")
+def get_projects():
+    resp = requests.get(f"{BASE_URL}/projects", headers=HEADERS, timeout=TIMEOUT)
+    resp.raise_for_status()
+    return {"projects": resp.json()}
 
 
 @router.get("/task_diagnostics")
@@ -266,32 +272,24 @@ def task_diagnostics():
         ]
     }
 
+# oben im File dürfen SERVICE_URL bzw. BASE_URL weiter existieren, wir brauchen sie hier nicht mehr
 
 @router.get("/cleanup_recommendations")
 def cleanup_recommendations():
-    diag_resp = requests.get(
-        "http://127.0.0.1:8000/task_diagnostics",
-        timeout=TIMEOUT
-    )
-    if diag_resp.status_code != 200:
-        raise HTTPException(status_code=500, detail="Diagnose konnte nicht geladen werden")
-
-    diagnostics = diag_resp.json().get("diagnostics", [])
+    # direkt task_diagnostics() aufrufen, statt HTTP-Request
+    diag = task_diagnostics()
+    diagnostics = diag["diagnostics"]
     recommendations = []
+
     for d in diagnostics:
         missing = []
         suggested_update = {}
-
         if "missing_due" in d["issues"]:
-            suggested_update["due_string"] = "tomorrow"
-            missing.append("due")
+            suggested_update["due_string"] = "tomorrow"; missing.append("due")
         if "low_or_missing_priority" in d["issues"]:
-            suggested_update["priority"] = 3
-            missing.append("priority")
+            suggested_update["priority"] = 3; missing.append("priority")
         if "missing_label" in d["issues"] and d.get("suggested_label"):
-            suggested_update["labels"] = [d["suggested_label"]]
-            missing.append("label")
-
+            suggested_update["labels"] = [d["suggested_label"]]; missing.append("label")
         if suggested_update:
             recommendations.append({
                 "task_id": d["id"],
@@ -302,23 +300,20 @@ def cleanup_recommendations():
 
     return {
         "suggested_updates": recommendations,
-        "summary": {"total_analyzed": len(diagnostics), "recommendations": len(recommendations)},
+        "summary": {
+            "total_analyzed": len(diagnostics),
+            "recommendations": len(recommendations)
+        },
         "next_action": "Bestätige über /review_batch oder sende direkt an /update_task"
     }
 
 
 @router.get("/review_batch")
 def review_batch(size: int = 5):
-    resp = requests.get(
-        "http://127.0.0.1:8000/cleanup_recommendations",
-        timeout=TIMEOUT
-    )
-    if resp.status_code != 200:
-        raise HTTPException(status_code=500, detail="Fehler beim Abrufen der Vorschläge")
-
-    all_suggestions = resp.json().get("suggested_updates", [])
+    # direkt cleanup_recommendations() aufrufen
+    batch = cleanup_recommendations()["suggested_updates"]
     return {
-        "review_batch": all_suggestions[:size],
+        "review_batch": batch[:size],
         "instruction": (
             "Antwortformat Beispiel:\n"
             "1 akzeptieren\n"
@@ -329,112 +324,122 @@ def review_batch(size: int = 5):
         )
     }
 
+import re
+
+# Stelle sicher, dass UpdateTaskInput oben importiert ist:
+# from routers.tasks import UpdateTaskInput, update_task
 
 @router.post("/execute_review_response")
 def execute_review_response(data: dict):
-    import re
     batch = data.get("review_batch", [])
     raw_response = data.get("response", "")
     if not batch or not raw_response:
         raise HTTPException(status_code=400, detail="review_batch und response sind erforderlich")
 
     executed, skipped, errors = [], [], {}
+
     for line in raw_response.strip().split("\n"):
-        match = re.match(r"^(\d+)(:| )\s*(.*)$", line.strip())
-        if not match:
+        m = re.match(r"^(\d+)(:| )\s*(.*)$", line.strip())
+        if not m:
             continue
-        idx = int(match.group(1)) - 1
-        if idx < 0 or idx >= len(batch):
-            errors[str(idx + 1)] = "Index außerhalb des review_batch"
+        idx = int(m.group(1)) - 1
+        if not (0 <= idx < len(batch)):
+            errors[str(idx+1)] = "Index außerhalb des review_batch"
             continue
 
-        entry = batch[idx]
-        task_id = entry["task_id"]
-        suggestion = entry["suggested_update"]
-        user_input = match.group(3).strip().lower()
+        entry       = batch[idx]
+        task_id     = entry["task_id"]
+        suggestion  = entry["suggested_update"]
+        user_input  = m.group(3).strip().lower()
 
         if user_input.startswith("skip"):
-            skipped.append(str(idx + 1))
+            skipped.append(str(idx+1))
             continue
 
-        update_payload = {"task_id": task_id}
+        # Baue das Payload für update_task
+        payload = {"task_id": task_id}
         if user_input.startswith("akzeptieren"):
-            update_payload.update(suggestion)
+            payload.update(suggestion)
         else:
-            fields = re.split(r",\s*", user_input)
-            for f in fields:
+            for f in re.split(r",\s*", user_input):
                 if f.startswith("prio"):
-                    update_payload["priority"] = int(re.findall(r"\d+", f)[0])
+                    payload["priority"] = int(re.findall(r"\d+", f)[0])
                 elif f.startswith("due"):
                     ds = re.findall(r"\d{4}-\d{2}-\d{2}", f)
-                    update_payload["due_string"] = ds[0] if ds else f.replace("due", "").strip()
+                    payload["due_string"] = ds[0] if ds else f.replace("due","").strip()
                 elif f.startswith("project"):
-                    update_payload["project_name"] = f.split(" ", 1)[1].strip()
+                    payload["project_name"] = f.split(" ",1)[1].strip()
 
+        # Rufe direkt das interne update_task auf
         try:
-            r = requests.post(
-                "http://127.0.0.1:8000/update_task",
-                json=update_payload,
-                timeout=TIMEOUT
-            )
-            if r.status_code not in (200, 204):
-                errors[str(idx + 1)] = f"Update fehlgeschlagen ({r.status_code})"
-            else:
-                executed.append({"task_id": task_id, "applied": update_payload})
+            # wandelt payload in das Pydantic‑Model um
+            inp = UpdateTaskInput(**payload)
+            update_task(inp)
+            executed.append({"task_id": task_id, "applied": payload})
+        except HTTPException as he:
+            errors[str(idx+1)] = f"Update fehlgeschlagen: {he.detail}"
         except Exception as e:
-            errors[str(idx + 1)] = f"Request-Fehler: {str(e)}"
+            errors[str(idx+1)] = f"Fehler: {e}"
 
     return {"executed": executed, "skipped": skipped, "errors": errors}
 
-
 @router.get("/focus_session")
 def focus_session(limit: int = 3):
-    resp = requests.get(
-        f"{BASE_URL}/tasks",
-        headers=HEADERS,
-        timeout=TIMEOUT
-    )
-    if resp.status_code != 200:
-        raise HTTPException(status_code=500, detail="Fehler beim Laden der Aufgaben")
+    try:
+        resp = requests.get(f"{BASE_URL}/tasks", headers=HEADERS, timeout=TIMEOUT)
+        resp.raise_for_status()
+        tasks = resp.json()
 
-    filtered, tasks = [], resp.json()
-    for t in tasks:
-        if t.get("is_completed") or not t.get("due") or t.get("priority", 1) < 3:
-            continue
-        dur = t.get("duration", {}).get("amount", 0)
-        if dur > 60:
-            continue
-        labels = [l.lower() for l in t.get("labels", [])]
-        filtered.append({
-            "id": t["id"],
-            "content": t["content"],
-            "due": t["due"],
-            "priority": t["priority"],
-            "duration": t.get("duration"),
-            "labels": labels,
-            "focus": any(x in labels for x in ["do", "deliver", "deep"])
-        })
-    filtered.sort(key=lambda x: (-x["priority"], x["due"]["date"]))
-    return {"focus_tasks": filtered[:limit], "total_found": len(filtered)}
+        filtered = []
+        for t in tasks:
+            # nur offene Tasks mit Fälligkeitsdatum und hoher Priorität
+            if t.get("is_completed") or not t.get("due") or t.get("priority", 1) < 3:
+                continue
 
+            dur_obj = t.get("duration") or {}
+            duration = dur_obj.get("amount", 0)
+
+            # Dauer ≤ 60 Minuten
+            if duration > 60:
+                continue
+
+            labels = [l.lower() for l in t.get("labels", [])]
+            filtered.append({
+                "id": t["id"],
+                "content": t["content"],
+                "due": t["due"],
+                "priority": t.get("priority", 1),
+                "duration": duration,
+                "labels": labels,
+                "focus": any(x in labels for x in ["do", "deliver", "deep"])
+            })
+
+        # Sortierung: höhere Priorität zuerst, dann Fälligkeitsdatum
+        filtered.sort(key=lambda x: (-x["priority"], x["due"]["date"]))
+
+        return {
+            "focus_tasks": filtered[:limit],
+            "total_found": len(filtered),
+            "logic": "Priorität ≥ 3, due vorhanden, Dauer ≤ 60 Min, Fokus-Labels optional"
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"focus_session-Fehler: {e}")
 
 @router.get("/label_recommendations")
 def label_recommendations():
-    resp = requests.get(
-        f"{BASE_URL}/tasks",
-        headers=HEADERS,
-        timeout=TIMEOUT
-    )
+    resp = requests.get(f"{BASE_URL}/tasks", headers=HEADERS, timeout=TIMEOUT)
     if resp.status_code != 200:
-        raise HTTPException(status_code=500, detail="Fehler beim Laden der Aufgaben")
+        raise HTTPException(500, "Fehler beim Laden der Aufgaben von Todoist")
 
     suggestions = []
     for t in resp.json():
         if t.get("labels"):
             continue
+
         content = t.get("content", "").lower()
-        prio = t.get("priority", 1)
-        due = t.get("due")
+        prio    = t.get("priority", 1)
+        due     = t.get("due")
+
         if any(w in content for w in ["review", "plan", "entwurf", "konzept", "strategie"]):
             lbl = "plan"
         elif any(w in content for w in ["abschicken", "finalisieren", "abgeben", "fertigstellen"]):
@@ -447,68 +452,77 @@ def label_recommendations():
             lbl = "quick"
         else:
             lbl = "admin"
+
         suggestions.append({
             "task_id": t["id"],
             "content": t["content"],
             "suggested_label": lbl
         })
-    return {"recommendations": suggestions, "total_suggested": len(suggestions), "info": "Nur Tasks ohne Label werden berücksichtigt"}
 
+    return {
+        "recommendations": suggestions,
+        "total_suggested": len(suggestions),
+        "info": "Nur Tasks ohne Label werden berücksichtigt"
+    }
+
+
+# —————————————————————————————————————————————
+# 2) Accept Label Recommendations
+# —————————————————————————————————————————————
+
+class AcceptLabelsInput(BaseModel):
+    accept: List[str]  # Liste von task_id
 
 @router.post("/accept_label_recommendations")
-def accept_label_recommendations(data: dict):
-    mode = data.get("accept")
-    if not mode:
-        raise HTTPException(status_code=400, detail="Feld 'accept' fehlt")
+def accept_label_recommendations(data: AcceptLabelsInput):
+    # 1) Hole die Vorschläge direkt aus der Funktion
+    rec = label_recommendations()
+    suggestions = rec["recommendations"]
 
-    suggestion_resp = requests.get(
-        "http://127.0.0.1:8000/label_recommendations",
-        timeout=TIMEOUT
-    )
-    if suggestion_resp.status_code != 200:
-        raise HTTPException(status_code=500, detail="Vorschläge konnten nicht geladen werden")
-    suggestions = suggestion_resp.json().get("recommendations", [])
-
-    label_resp = requests.get(
-        f"{BASE_URL}/labels",
-        headers=HEADERS,
-        timeout=TIMEOUT
-    )
+    # 2) Lade alle Label-IDs von Todoist
+    label_resp = requests.get(f"{BASE_URL}/labels", headers=HEADERS, timeout=TIMEOUT)
     if label_resp.status_code != 200:
-        raise HTTPException(status_code=500, detail="Labels konnten nicht geladen werden")
+        raise HTTPException(500, "Labels konnten nicht geladen werden")
     label_map = {l["name"].strip().lower(): l["id"] for l in label_resp.json()}
 
-    if mode == "all":
-        accepted_ids = [t["task_id"] for t in suggestions]
-    elif isinstance(mode, list):
-        accepted_ids = mode
-    else:
-        raise HTTPException(status_code=400, detail="Ungültiges Format für 'accept'")
+    # 3) Bestimme, welche IDs akzeptiert wurden
+    accepted_ids = set(data.accept)
 
     executed, skipped, errors = [], [], {}
+
+    # 4) Für jede Empfehlung
     for s in suggestions:
         tid = s["task_id"]
         if tid not in accepted_ids:
             skipped.append(tid)
             continue
+
         lbl = s["suggested_label"].strip().lower()
         lid = label_map.get(lbl)
         if not lid:
             errors[tid] = f"Label '{lbl}' nicht gefunden"
             continue
+
         payload = {"task_id": tid, "labels": [lid]}
+
+        # 5) Update entweder lokal oder direkt gegen Todoist
         try:
+            # Variante A: lokale Funktion (wenn Du update_task importiert hast)
+            # update_task(UpdateTaskInput(task_id=tid, labels=[lid]))
+            #
+            # Variante B: direkte API
             r = requests.post(
-                "http://127.0.0.1:8000/update_task",
+                f"{BASE_URL}/tasks/{tid}",
+                headers=HEADERS,
                 json=payload,
                 timeout=TIMEOUT
             )
             if r.status_code not in (200, 204):
-                errors[tid] = f"Update fehlgeschlagen ({r.status_code})"
+                errors[tid] = f"Todoist-Update fehlgeschlagen ({r.status_code})"
             else:
-                executed.append({"task_id": tid, "label_id": lid, "label": lbl})
+                executed.append({"task_id": tid, "label": lbl})
         except Exception as e:
-            errors[tid] = f"Fehler: {str(e)}"
+            errors[tid] = str(e)
 
     return {
         "executed": executed,
@@ -520,7 +534,6 @@ def accept_label_recommendations(data: dict):
             "total_failed": len(errors)
         }
     }
-
 
 @router.get("/me")
 def get_me():
@@ -591,43 +604,32 @@ def prioritized_tasks(limit: int = 5):
     }
 
 
+from fastapi import HTTPException
+from datetime import datetime
+from routers.tasks import (
+    prioritized_tasks,
+    review_batch,
+    get_tasks_needing_schedule
+)
+
 @router.get("/commander_dashboard")
 def commander_dashboard(limit: int = 5):
     try:
-        prio_resp = requests.get(
-            "http://127.0.0.1:8000/prioritized_tasks",
-            timeout=TIMEOUT
-        )
-        if prio_resp.status_code != 200:
-            raise RuntimeError("Fehler beim Laden der priorisierten Tasks")
-        top_tasks = prio_resp.json().get("prioritized", [])[:limit]
-
-        review_resp = requests.get(
-            "http://127.0.0.1:8000/review_batch",
-            timeout=TIMEOUT
-        )
-        if review_resp.status_code != 200:
-            raise RuntimeError("Fehler beim Review-Batch")
-        review_batch = review_resp.json().get("review_batch", [])
-
-        plan_resp = requests.get(
-            "http://127.0.0.1:8000/plan_tasks",
-            timeout=TIMEOUT
-        )
-        if plan_resp.status_code != 200:
-            raise RuntimeError("Fehler beim Plan-Scan")
-        unplanned = plan_resp.json().get("tasks", [])
+        # Direkte Funktionsaufrufe statt HTTP‑Requests
+        top_tasks    = prioritized_tasks(limit)["prioritized"]
+        review_needs = review_batch(size=limit)["review_batch"]
+        unplanned    = get_tasks_needing_schedule()["tasks"]
 
         return {
             "date": datetime.utcnow().date().isoformat(),
             "top_tasks": top_tasks,
-            "review_needs": review_batch,
+            "review_needs": review_needs,
             "unplanned_tasks": unplanned,
             "slot_suggestions": {
-                "deep_work": [t["content"] for t in top_tasks if "plan" in t.get("labels", []) or t["score"] >= 6],
-                "quick_wins": [t["content"] for t in top_tasks if "quick" in t.get("reason", []) or t["score"] <= 4],
+                "deep_work":   [t["content"] for t in top_tasks if "plan" in t.get("labels", []) or t["score"] >= 6],
+                "quick_wins":  [t["content"] for t in top_tasks if "quick" in t.get("reason", []) or t["score"] <= 4],
                 "today_focus": [t["content"] for t in top_tasks if "due today" in t.get("reason", [])]
             }
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Commander-Dashboard Fehler: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Commander‑Dashboard Fehler: {e}")
