@@ -71,6 +71,10 @@ def complete_task(data: CompleteTaskInput):
     return {"status": "completed", "task_id": data.task_id}
 
 
+from datetime import datetime
+import dateparser
+from fastapi import HTTPException
+
 @router.post("/add_task")
 def add_task(data: AddTaskInput):
     project_id = data.project_id
@@ -88,19 +92,24 @@ def add_task(data: AddTaskInput):
 
     payload = {
         "content": data.content,
-        "project_id": project_id,
-        "due_string": data.due_string
+        "project_id": project_id
     }
 
-    if data.duration_minutes:
+    # Verwende dateparser zur Interpretation des Fälligkeitsdatums
+    if data.duration_minutes and data.due_string:
+        due_date = dateparser.parse(data.due_string)
+        if not due_date:
+            raise HTTPException(status_code=400, detail="Konnte Fälligkeitsdatum nicht interpretieren")
+
         payload["due"] = {
-            "string": data.due_string,
+            "date": due_date.date().isoformat(),
             "duration": {
                 "amount": data.duration_minutes,
                 "unit": "minute"
             }
         }
-    payload.pop("due_string", None)  # ← sicherer als del
+    elif data.due_string:
+        payload["due_string"] = data.due_string
 
     resp = requests.post(
         f"{BASE_URL}/tasks",
@@ -111,7 +120,6 @@ def add_task(data: AddTaskInput):
     if resp.status_code != 200:
         raise HTTPException(status_code=500, detail="Fehler beim Anlegen der Aufgabe")
     return resp.json()
-
 
 @router.post("/quick_add")
 def quick_add(data: QuickAddInput):
