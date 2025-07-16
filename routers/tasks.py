@@ -169,62 +169,30 @@ def get_tasks_needing_schedule():
     ]
     return {"tasks": unplanned, "total": len(unplanned)}
 
-@router.patch("/update_task")
+@app.patch("/update_task")
 def update_task(data: UpdateTaskInput):
-    payload: dict = {}
+    headers = HEADERS.copy()
+    payload = {}
 
-    if data.content is not None:
-        payload["content"] = data.content
     if data.project_id:
         payload["project_id"] = data.project_id
     elif data.project_name:
-        try:
-            payload["project_id"] = resolve_project_id_by_name(
-                requests,
-                BASE_URL,
-                HEADERS,
-                data.project_name
-            )
-        except ValueError as ve:
-            raise HTTPException(status_code=400, detail=str(ve))
-    if data.due_string is not None:
-        payload["due_string"] = data.due_string
-    if data.priority is not None:
-        if data.priority not in (1, 2, 3, 4):
-            raise HTTPException(status_code=400, detail="Priority muss zwischen 1 und 4 liegen")
-        payload["priority"] = data.priority
+        pr = requests.get("https://api.todoist.com/rest/v2/projects", headers=headers, timeout=5)
+        pr.raise_for_status()
+        m = next((p for p in pr.json() if p["name"].lower() == data.project_name.lower()), None)
+        if not m:
+            raise HTTPException(status_code=400, detail=f"Projekt '{data.project_name}' nicht gefunden")
+        payload["project_id"] = m["id"]
 
-    if data.labels is not None:
-        raise HTTPException(status_code=400, detail="Labels bitte über /sync_update_labels setzen")
+    for field in ("content", "due_string", "duration_minutes"):
+        val = getattr(data, field)
+        if val is not None:
+            payload[field] = val
 
-    if data.duration_minutes is not None:
-        payload["duration"] = {"amount": data.duration_minutes, "unit": "minute"}
-
-    if not payload:
-        raise HTTPException(status_code=400, detail="Keine Felder zum Aktualisieren angegeben")
-
-    # 🚀 PATCH versuchen
-    resp = requests.patch(
-        f"{BASE_URL}/tasks/{data.task_id}",
-        headers=HEADERS,
-        json=payload,
-        timeout=TIMEOUT
-    )
-
-    # 🔁 Fallback auf POST bei 405
-    if resp.status_code == 405:
-        print(f"⚠️ PATCH nicht erlaubt – Fallback via POST für Task {data.task_id}")
-        resp = requests.post(
-            f"{BASE_URL}/tasks/{data.task_id}",
-            headers=HEADERS,
-            json=payload,
-            timeout=TIMEOUT
-        )
-
+    resp = requests.post(f"https://api.todoist.com/rest/v2/tasks/{data.task_id}", json=payload, headers=headers, timeout=5)
     if resp.status_code not in (200, 204):
-        raise HTTPException(status_code=500, detail=f"Update fehlgeschlagen ({resp.status_code})")
-
-    return {"status": "updated", "task_id": data.task_id, "changes": payload}
+        raise HTTPException(status_code=500, detail="Fehler beim Aktualisieren")
+    return {"status": "updated", **payload}
 
 @router.post("/sync_update_labels")
 async def sync_update_labels(
