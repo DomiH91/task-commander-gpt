@@ -343,6 +343,37 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/DashboardResponse'
+
+  /sync_update_labels:
+    post:
+      summary: Set task labels via Todoist Sync API
+      operationId: syncUpdateLabels
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - task_id
+                - labels
+              properties:
+                task_id:
+                  type: string
+                labels:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        '200':
+          description: Label update confirmation
+          content:
+            application/json:
+              schema:
+                type: object
+                
 # Jetzt folgen die vollständig aktualisierten Komponenten:
 components:
   securitySchemes:

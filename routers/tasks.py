@@ -10,7 +10,6 @@ from core.config import AppConfig
 from models.schemas import (
     AddTaskInput,
     CompleteTaskInput,
-    LabelUpdateInput,
     QuickAddInput,
     UpdateTaskInput
 )
@@ -180,8 +179,10 @@ def update_task(data: UpdateTaskInput):
         if data.priority not in (1, 2, 3, 4):
             raise HTTPException(status_code=400, detail="Priority muss zwischen 1 und 4 liegen")
         payload["priority"] = data.priority
+
     if data.labels is not None:
-        payload["labels"] = data.labels
+        raise HTTPException(status_code=400, detail="Labels bitte über /sync_update_labels setzen")
+
     if data.duration_minutes is not None:
         payload["duration"] = {"amount": data.duration_minutes, "unit": "minute"}
 
@@ -224,35 +225,6 @@ async def sync_update_labels(
         raise HTTPException(status_code=500, detail=str(e))
 
 # — Jetzt keine weitere router-Zuweisung!
-
-@router.post("/update_labels")
-def update_labels(data: LabelUpdateInput):
-    task_id = data.task_id
-    labels = data.labels
-
-    # Lade Label-IDs von Todoist
-    label_resp = requests.get(f"{BASE_URL}/labels", headers=HEADERS, timeout=TIMEOUT)
-    if label_resp.status_code != 200:
-        raise HTTPException(status_code=500, detail="Labels konnten nicht geladen werden")
-
-    label_map = {l["name"].strip().lower(): l["id"] for l in label_resp.json()}
-    label_ids = [label_map[l.lower()] for l in labels if l.lower() in label_map]
-
-    # PATCH-Call an Todoist mit label_ids
-    resp = requests.patch(
-        f"{BASE_URL}/tasks/{task_id}",
-        headers=HEADERS,
-        json={"label_ids": label_ids},
-        timeout=TIMEOUT
-    )
-    if resp.status_code not in (200, 204):
-        raise HTTPException(status_code=500, detail=f"Label-Update fehlgeschlagen ({resp.status_code})")
-
-    return {
-        "status": "labels_updated",
-        "task_id": task_id,
-        "labels": labels
-    }
 
 @router.get("/get_projects")
 def get_projects():
