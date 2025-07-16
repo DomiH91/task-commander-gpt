@@ -93,7 +93,14 @@ def add_task(data: AddTaskInput):
     }
 
     if data.duration_minutes:
-        payload["duration"] = {"amount": data.duration_minutes, "unit": "minute"}
+        payload["due"] = {
+            "string": data.due_string,
+            "duration": {
+                "amount": data.duration_minutes,
+                "unit": "minute"
+            }
+        }
+    payload.pop("due_string", None)  # ← sicherer als del
 
     resp = requests.post(
         f"{BASE_URL}/tasks",
