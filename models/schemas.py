@@ -6,6 +6,10 @@ class CompleteTaskInput(BaseModel):
     task_id: str
     comment: Optional[str] = ""
 
+class LabelUpdateInput(BaseModel):
+    task_id: str
+    labels: List[str]
+
 class AddTaskInput(BaseModel):
     content: str
     project_id: Optional[str] = None

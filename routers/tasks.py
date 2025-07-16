@@ -190,12 +190,24 @@ def update_task(data: UpdateTaskInput):
 
     return {"status": "updated", "task_id": data.task_id, "changes": payload}
 
+from models.schemas import LabelUpdateInput
+from fastapi import APIRouter, HTTPException
+import requests
+
 @router.post("/update_labels")
-def update_labels(task_id: str, labels: List[str]):
+def update_labels(data: LabelUpdateInput):
+    task_id = data.task_id
+    labels = data.labels
+
+    # Lade Label-IDs von Todoist
     label_resp = requests.get(f"{BASE_URL}/labels", headers=HEADERS, timeout=TIMEOUT)
+    if label_resp.status_code != 200:
+        raise HTTPException(status_code=500, detail="Labels konnten nicht geladen werden")
+
     label_map = {l["name"].strip().lower(): l["id"] for l in label_resp.json()}
     label_ids = [label_map[l.lower()] for l in labels if l.lower() in label_map]
 
+    # Setze neue Labels
     resp = requests.post(
         f"{BASE_URL}/tasks/{task_id}/labels",
         headers=HEADERS,
@@ -204,7 +216,12 @@ def update_labels(task_id: str, labels: List[str]):
     )
     if resp.status_code != 204:
         raise HTTPException(status_code=500, detail=f"Label-Update fehlgeschlagen ({resp.status_code})")
-    return {"status": "labels_updated", "task_id": task_id, "labels": labels}
+
+    return {
+        "status": "labels_updated",
+        "task_id": task_id,
+        "labels": labels
+    }
 
 @router.get("/get_projects")
 def get_projects():
