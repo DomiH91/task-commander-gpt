@@ -203,12 +203,24 @@ def update_task(data: UpdateTaskInput):
     if not payload:
         raise HTTPException(status_code=400, detail="Keine Felder zum Aktualisieren angegeben")
 
+    # 🚀 PATCH versuchen
     resp = requests.patch(
         f"{BASE_URL}/tasks/{data.task_id}",
         headers=HEADERS,
         json=payload,
         timeout=TIMEOUT
     )
+
+    # 🔁 Fallback auf POST bei 405
+    if resp.status_code == 405:
+        print(f"⚠️ PATCH nicht erlaubt – Fallback via POST für Task {data.task_id}")
+        resp = requests.post(
+            f"{BASE_URL}/tasks/{data.task_id}",
+            headers=HEADERS,
+            json=payload,
+            timeout=TIMEOUT
+        )
+
     if resp.status_code not in (200, 204):
         raise HTTPException(status_code=500, detail=f"Update fehlgeschlagen ({resp.status_code})")
 
