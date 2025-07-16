@@ -467,6 +467,13 @@ components:
         duration_minutes:
           type: integer
           nullable: true
+        priority:
+          type: integer
+          nullable: true
+        labels:
+          type: array
+          items:
+          type: string  
 
     DiagnosticsResponse:
       type: object
