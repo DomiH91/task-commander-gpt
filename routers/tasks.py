@@ -111,6 +111,10 @@ def add_task(data: AddTaskInput):
     elif data.due_string:
         payload["due_string"] = data.due_string
 
+    import json
+    print("📤 Payload an Todoist:")
+    print(json.dumps(payload, indent=2))
+
     resp = requests.post(
         f"{BASE_URL}/tasks",
         headers=HEADERS,
