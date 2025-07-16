@@ -1,15 +1,21 @@
 # routers/tasks.py
 
+from datetime import datetime, timedelta
 from typing import List
 import requests
-from fastapi import Depends
-from services.todoist import TodoistService
-from models.schemas import LabelUpdateInput
-from fastapi import APIRouter, HTTPException
-from models.schemas import AddTaskInput, UpdateTaskInput, CompleteTaskInput, QuickAddInput
-from utils.project_utils import resolve_project_id_by_name
-from datetime import datetime, timedelta
+
+from fastapi import APIRouter, Body, Depends, HTTPException, Request
+
 from core.config import AppConfig
+from models.schemas import (
+    AddTaskInput,
+    CompleteTaskInput,
+    LabelUpdateInput,
+    QuickAddInput,
+    UpdateTaskInput
+)
+from services.todoist import TodoistService, get_todoist_service
+from utils.project_utils import resolve_project_id_by_name
 
 # ── Konfiguration ────────────────────────────────────────────────────────────
 
@@ -193,17 +199,31 @@ def update_task(data: UpdateTaskInput):
 
     return {"status": "updated", "task_id": data.task_id, "changes": payload}
 
-from models.schemas import LabelUpdateInput
-from fastapi import APIRouter, HTTPException
-import requests
-from services.todoist import get_todoist_service
-
 @router.post("/sync_update_labels")
 async def sync_update_labels(
-    data: LabelUpdateInput,
+    request: Request,
     todoist: TodoistService = Depends(get_todoist_service)
 ):
-    return await todoist.sync_update_labels(data.task_id, data.labels)
+    body = await request.json()
+    print("🧾 Eingehender Payload:", body)
+
+    task_id = body.get("task_id")
+    labels = body.get("labels")
+    print("🎯 Task-ID:", task_id)
+    print("🏷️ Labels:", labels)
+
+    if not task_id or not isinstance(labels, list):
+        raise HTTPException(status_code=400, detail="task_id und labels erforderlich")
+
+    try:
+        result = await todoist.sync_update_labels(task_id, labels)
+        print("✅ Todoist Sync-Response:", result)
+        return result
+    except Exception as e:
+        print("❌ Fehler beim Todoist-Call:", e)
+        raise HTTPException(status_code=500, detail=str(e))
+
+# — Jetzt keine weitere router-Zuweisung!
 
 @router.post("/update_labels")
 def update_labels(data: LabelUpdateInput):

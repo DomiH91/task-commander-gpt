@@ -3,6 +3,7 @@
 import httpx
 import uuid
 import json
+from fastapi import HTTPException
 from core.config import AppConfig
 from fastapi import Depends, Request
 
@@ -35,7 +36,6 @@ class TodoistService:
         r.raise_for_status()
 
     async def add_task(self, payload: dict):
-        # Konvertiere duration_minutes in Todoist-kompatibles Format
         if "duration_minutes" in payload:
             payload["duration"] = {
                 "amount": payload.pop("duration_minutes"),
@@ -52,7 +52,6 @@ class TodoistService:
         return r.json()
 
     async def update_task(self, task_id: str, payload: dict):
-        # Konvertiere duration_minutes in Todoist-kompatibles Format
         if "duration_minutes" in payload:
             payload["duration"] = {
                 "amount": payload.pop("duration_minutes"),
@@ -67,69 +66,53 @@ class TodoistService:
         )
         r.raise_for_status()
 
-    async def update_labels(self, task_id: str, labels: list[str]):
-        # Schritt 1: Lade Label-IDs von Todoist
+    async def sync_update_labels(self, task_id: str, label_names: list[str]):
+        # 1. Labels laden
         r_labels = await self.client.get(
-            f"{self.base_url}/labels",
+            "https://api.todoist.com/rest/v2/labels",
             headers=self.headers,
             timeout=self.timeout
         )
         r_labels.raise_for_status()
         label_map = {l["name"].strip().lower(): l["id"] for l in r_labels.json()}
-        label_ids = [label_map[l.lower()] for l in labels if l.lower() in label_map]
 
-        # Schritt 2: PATCH statt POST verwenden
-        r = await self.client.patch(
-            f"{self.base_url}/tasks/{task_id}",
-            headers=self.headers,
-            json={"label_ids": label_ids},
-            timeout=self.timeout
-        )
-        r.raise_for_status()
+        # 2. IDs sammeln
+        label_ids = [int(label_map[n.lower()]) for n in label_names if n.lower() in label_map]
+        print("🔎 Mapped label_ids:", label_ids)
 
-async def get_todoist_service(
-    request: Request,
-    config: AppConfig = Depends(),
-) -> TodoistService:
-    """
-    FastAPI dependency that retrieves the shared TodoistService
-    instance from the app state.
-    """
-    return request.app.state.todoist_service
+        if not label_ids:
+            raise HTTPException(status_code=400, detail="Keines der angegebenen Labels gefunden.")
 
-async def sync_update_labels(self, task_id: str, label_names: list[str]):
-        # 1. Labels auflösen
-        r_labels = await self.client.get(
-            f"{self.base_url}/labels",
-            headers=self.headers,
-            timeout=self.timeout
-        )
-        r_labels.raise_for_status()
-        label_map = {l["name"].strip().lower(): l["id"] for l in r_labels.json()}
-        label_ids = [label_map[n.lower()] for n in label_names if n.lower() in label_map]
-
-        # 2. Baue Sync-Command
-        sync_cmd = {
+        # 3. Sync-Command definieren
+        commands = [{
             "type": "item_update",
             "uuid": str(uuid.uuid4()),
             "args": {
                 "id": task_id,
                 "label_ids": label_ids
             }
-        }
+        }]
+        print("📦 Commands payload:", commands)
 
-        # 3. POST zur Sync API
+        # 4. Sync-Aufruf—korrekt als JSON
         sync_url = "https://api.todoist.com/sync/v9/sync"
         payload = {
-            "sync_token": "*",  # * = initial sync
-            "commands": json.dumps([sync_cmd])
+            "sync_token": "*",
+            "commands": commands
         }
 
         r = await self.client.post(
             sync_url,
             headers=self.headers,
-            data=payload,
+            json=payload,
             timeout=self.timeout
         )
+        print("🔁 Sync-Response status:", r.status_code, "body:", r.text)
         r.raise_for_status()
         return r.json()
+
+async def get_todoist_service(
+    request: Request,
+    config: AppConfig = Depends(),
+) -> TodoistService:
+    return request.app.state.todoist_service
