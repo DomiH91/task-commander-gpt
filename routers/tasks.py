@@ -169,7 +169,7 @@ def get_tasks_needing_schedule():
     ]
     return {"tasks": unplanned, "total": len(unplanned)}
 
-@app.patch("/update_task")
+@router.patch("/update_task")
 def update_task(data: UpdateTaskInput):
     headers = HEADERS.copy()
     payload = {}
