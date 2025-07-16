@@ -2,8 +2,8 @@
 
 import requests
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
-from typing import Optional, List
+from models.schemas import AddTaskInput, UpdateTaskInput, CompleteTaskInput, QuickAddInput
+from utils.project_utils import resolve_project_id_by_name
 from datetime import datetime, timedelta
 from core.config import AppConfig
 
@@ -36,32 +36,6 @@ def init_menu():
         ]
     }
 
-# ── Models ────────────────────────────────────────────────────────────────────
-class CompleteTaskInput(BaseModel):
-    task_id: str
-    comment: str = ""
-
-class AddTaskInput(BaseModel):
-    content: str
-    project_id: Optional[str] = None
-    project_name: Optional[str] = None
-    due_string: Optional[str] = None
-    duration_minutes: Optional[int] = None
-
-class QuickAddInput(BaseModel):
-    content: str
-
-class UpdateTaskInput(BaseModel):
-    task_id: str
-    content: Optional[str] = None
-    project_id: Optional[str] = None
-    project_name: Optional[str] = None
-    due_string: Optional[str] = None
-    priority: Optional[int] = None
-    duration: Optional[int] = None
-    labels: Optional[List[str]] = None
-
-
 # ── Endpoints ─────────────────────────────────────────────────────────────────
 
 @router.get("/get_tasks")
@@ -93,23 +67,24 @@ def add_task(data: AddTaskInput):
     project_id = data.project_id
 
     if not project_id and data.project_name:
-        pr = requests.get(
-            f"{BASE_URL}/projects",
-            headers=HEADERS,
-            timeout=TIMEOUT
-        )
-        if pr.status_code != 200:
-            raise HTTPException(status_code=500, detail="Fehler beim Laden der Projekte")
-        match = next((p for p in pr.json() if p["name"].lower() == data.project_name.lower()), None)
-        if not match:
-            raise HTTPException(status_code=400, detail=f"Projekt '{data.project_name}' nicht gefunden")
-        project_id = match["id"]
+        try:
+            project_id = resolve_project_id_by_name(
+                requests,
+                BASE_URL,
+                HEADERS,
+                data.project_name
+            )
+        except ValueError as ve:
+            raise HTTPException(status_code=400, detail=str(ve))
 
     payload = {
         "content": data.content,
         "project_id": project_id,
         "due_string": data.due_string
     }
+
+    if data.duration_minutes:
+        payload["duration"] = {"amount": data.duration_minutes, "unit": "minute"}
 
     resp = requests.post(
         f"{BASE_URL}/tasks",
@@ -171,26 +146,24 @@ def get_tasks_needing_schedule():
     ]
     return {"tasks": unplanned, "total": len(unplanned)}
 
-
 @router.patch("/update_task")
 def update_task(data: UpdateTaskInput):
     payload: dict = {}
+
     if data.content is not None:
         payload["content"] = data.content
     if data.project_id:
         payload["project_id"] = data.project_id
     elif data.project_name:
-        pr = requests.get(
-            f"{BASE_URL}/projects",
-            headers=HEADERS,
-            timeout=TIMEOUT
-        )
-        if pr.status_code != 200:
-            raise HTTPException(status_code=500, detail="Fehler beim Laden der Projekte")
-        match = next((p for p in pr.json() if p["name"].lower() == data.project_name.lower()), None)
-        if not match:
-            raise HTTPException(status_code=400, detail=f"Projekt '{data.project_name}' nicht gefunden")
-        payload["project_id"] = match["id"]
+        try:
+            payload["project_id"] = resolve_project_id_by_name(
+                requests,
+                BASE_URL,
+                HEADERS,
+                data.project_name
+            )
+        except ValueError as ve:
+            raise HTTPException(status_code=400, detail=str(ve))
     if data.due_string is not None:
         payload["due_string"] = data.due_string
     if data.priority is not None:
@@ -199,8 +172,8 @@ def update_task(data: UpdateTaskInput):
         payload["priority"] = data.priority
     if data.labels is not None:
         payload["labels"] = data.labels
-    if data.duration is not None:
-        payload["duration"] = {"amount": data.duration, "unit": "minute"}
+    if data.duration_minutes is not None:
+        payload["duration"] = {"amount": data.duration_minutes, "unit": "minute"}
 
     if not payload:
         raise HTTPException(status_code=400, detail="Keine Felder zum Aktualisieren angegeben")
@@ -213,6 +186,7 @@ def update_task(data: UpdateTaskInput):
     )
     if resp.status_code not in (200, 204):
         raise HTTPException(status_code=500, detail=f"Update fehlgeschlagen ({resp.status_code})")
+
     return {"status": "updated", "task_id": data.task_id, "changes": payload}
 
 @router.get("/get_projects")
@@ -373,21 +347,27 @@ def execute_review_response(data: dict):
 
         # Baue das Payload für update_task
         payload = {"task_id": task_id}
+
         if user_input.startswith("akzeptieren"):
             payload.update(suggestion)
         else:
-            for f in re.split(r",\s*", user_input):
+            for f in re.split(r",\\s*", user_input):
                 if f.startswith("prio"):
-                    payload["priority"] = int(re.findall(r"\d+", f)[0])
+                    payload["priority"] = int(re.findall(r"\\d+", f)[0])
                 elif f.startswith("due"):
-                    ds = re.findall(r"\d{4}-\d{2}-\d{2}", f)
-                    payload["due_string"] = ds[0] if ds else f.replace("due","").strip()
+                    ds = re.findall(r"\\d{4}-\\d{2}-\\d{2}", f)
+                    payload["due_string"] = ds[0] if ds else f.replace("due", "").strip()
                 elif f.startswith("project"):
-                    payload["project_name"] = f.split(" ",1)[1].strip()
+                    payload["project_name"] = f.split(" ", 1)[1].strip()
+                elif f.startswith("duration"):
+                    payload["duration_minutes"] = int(re.findall(r"\\d+", f)[0])
+
+        # Ergänze duration_minutes aus Vorschlag (wenn vorhanden)
+        if "duration_minutes" in suggestion:
+            payload["duration_minutes"] = suggestion["duration_minutes"]
 
         # Rufe direkt das interne update_task auf
         try:
-            # wandelt payload in das Pydantic‑Model um
             inp = UpdateTaskInput(**payload)
             update_task(inp)
             executed.append({"task_id": task_id, "applied": payload})
@@ -485,8 +465,7 @@ def label_recommendations():
 # 2) Accept Label Recommendations
 # —————————————————————————————————————————————
 
-class AcceptLabelsInput(BaseModel):
-    accept: List[str]  # Liste von task_id
+from models.schemas import AcceptLabelsInput
 
 @router.post("/accept_label_recommendations")
 def accept_label_recommendations(data: AcceptLabelsInput):

@@ -343,7 +343,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/DashboardResponse'
-
+# Jetzt folgen die vollständig aktualisierten Komponenten:
 components:
   securitySchemes:
     BearerAuth:
@@ -367,8 +367,17 @@ components:
         content:
           type: string
         due:
-          type: string
+          type: object
           nullable: true
+          properties:
+            date:
+              type: string
+            string:
+              type: string
+            lang:
+              type: string
+            is_recurring:
+              type: boolean
         duration_minutes:
           type: integer
           nullable: true
@@ -470,10 +479,11 @@ components:
         priority:
           type: integer
           nullable: true
+          enum: [1, 2, 3, 4]
         labels:
           type: array
           items:
-          type: string  
+            type: string
 
     DiagnosticsResponse:
       type: object
@@ -534,24 +544,36 @@ components:
         next_action:
           type: string
 
+    ReviewItem:
+      type: object
+      properties:
+        task_id:
+          type: string
+        content:
+          type: string
+        missing:
+          type: array
+          items:
+            type: string
+        suggested_update:
+          type: object
+          properties:
+            priority:
+              type: integer
+            labels:
+              type: array
+              items:
+                type: string
+            due_string:
+              type: string
+
     ReviewBatchResponse:
       type: object
       properties:
         review_batch:
           type: array
           items:
-            type: object
-            properties:
-              task_id:
-                type: string
-              content:
-                type: string
-              missing:
-                type: array
-                items:
-                  type: string
-              suggested_update:
-                type: object
+            $ref: '#/components/schemas/ReviewItem'
         instruction:
           type: string
 
@@ -564,7 +586,7 @@ components:
         review_batch:
           type: array
           items:
-            type: object
+            $ref: '#/components/schemas/ReviewItem'
         response:
           type: string
 

@@ -33,6 +33,13 @@ class TodoistService:
         r.raise_for_status()
 
     async def add_task(self, payload: dict):
+        # Konvertiere duration_minutes in Todoist-kompatibles Format
+        if "duration_minutes" in payload:
+            payload["duration"] = {
+                "amount": payload.pop("duration_minutes"),
+                "unit": "minute"
+            }
+
         r = await self.client.post(
             f"{self.base_url}/tasks",
             headers=self.headers,
@@ -43,7 +50,14 @@ class TodoistService:
         return r.json()
 
     async def update_task(self, task_id: str, payload: dict):
-        r = await self.client.post(
+        # Konvertiere duration_minutes in Todoist-kompatibles Format
+        if "duration_minutes" in payload:
+            payload["duration"] = {
+                "amount": payload.pop("duration_minutes"),
+                "unit": "minute"
+            }
+
+        r = await self.client.patch(
             f"{self.base_url}/tasks/{task_id}",
             headers=self.headers,
             json=payload,
