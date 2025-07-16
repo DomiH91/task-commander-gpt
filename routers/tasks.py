@@ -95,19 +95,14 @@ def add_task(data: AddTaskInput):
         "project_id": project_id
     }
 
-    # Verwende dateparser zur Interpretation des Fälligkeitsdatums
     if data.duration_minutes and data.due_string:
         due_date = dateparser.parse(data.due_string)
         if not due_date:
             raise HTTPException(status_code=400, detail="Konnte Fälligkeitsdatum nicht interpretieren")
 
-        payload["due"] = {
-            "date": due_date.date().isoformat(),
-            "duration": {
-                "amount": data.duration_minutes,
-                "unit": "minute"
-            }
-        }
+        payload["due_date"] = due_date.date().isoformat()
+        payload["duration_minutes"] = data.duration_minutes
+
     elif data.due_string:
         payload["due_string"] = data.due_string
 
