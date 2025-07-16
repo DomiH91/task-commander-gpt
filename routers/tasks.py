@@ -20,8 +20,23 @@ MY_USER_ID = "53165679"  # ← Deine echte ID aus /me
 
 router = APIRouter()
 
-# ── Models ────────────────────────────────────────────────────────────────────
+# ── Initialization Menu ────────────────────────────────────────────────────────
 
+@router.get("/init_menu")
+def init_menu():
+    return {
+        "options": [
+            "top3_focus",
+            "full_overview",
+            "complete_task",
+            "add_task",
+            "plan_tasks",
+            "prioritize_tasks",
+            "commander_dashboard"
+        ]
+    }
+
+# ── Models ────────────────────────────────────────────────────────────────────
 class CompleteTaskInput(BaseModel):
     task_id: str
     comment: str = ""
