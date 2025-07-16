@@ -373,7 +373,7 @@ paths:
             application/json:
               schema:
                 type: object
-                
+
 # Jetzt folgen die vollständig aktualisierten Komponenten:
 components:
   securitySchemes:
@@ -511,10 +511,6 @@ components:
           type: integer
           nullable: true
           enum: [1, 2, 3, 4]
-        labels:
-          type: array
-          items:
-            type: string
 
     DiagnosticsResponse:
       type: object
