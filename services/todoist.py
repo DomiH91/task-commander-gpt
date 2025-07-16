@@ -1,6 +1,8 @@
 # services/todoist.py
 
 import httpx
+import uuid
+import json
 from core.config import AppConfig
 from fastapi import Depends, Request
 
@@ -94,3 +96,40 @@ async def get_todoist_service(
     instance from the app state.
     """
     return request.app.state.todoist_service
+
+async def sync_update_labels(self, task_id: str, label_names: list[str]):
+        # 1. Labels auflösen
+        r_labels = await self.client.get(
+            f"{self.base_url}/labels",
+            headers=self.headers,
+            timeout=self.timeout
+        )
+        r_labels.raise_for_status()
+        label_map = {l["name"].strip().lower(): l["id"] for l in r_labels.json()}
+        label_ids = [label_map[n.lower()] for n in label_names if n.lower() in label_map]
+
+        # 2. Baue Sync-Command
+        sync_cmd = {
+            "type": "item_update",
+            "uuid": str(uuid.uuid4()),
+            "args": {
+                "id": task_id,
+                "label_ids": label_ids
+            }
+        }
+
+        # 3. POST zur Sync API
+        sync_url = "https://api.todoist.com/sync/v9/sync"
+        payload = {
+            "sync_token": "*",  # * = initial sync
+            "commands": json.dumps([sync_cmd])
+        }
+
+        r = await self.client.post(
+            sync_url,
+            headers=self.headers,
+            data=payload,
+            timeout=self.timeout
+        )
+        r.raise_for_status()
+        return r.json()

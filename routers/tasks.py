@@ -2,6 +2,9 @@
 
 from typing import List
 import requests
+from fastapi import Depends
+from services.todoist import TodoistService
+from models.schemas import LabelUpdateInput
 from fastapi import APIRouter, HTTPException
 from models.schemas import AddTaskInput, UpdateTaskInput, CompleteTaskInput, QuickAddInput
 from utils.project_utils import resolve_project_id_by_name
@@ -193,6 +196,14 @@ def update_task(data: UpdateTaskInput):
 from models.schemas import LabelUpdateInput
 from fastapi import APIRouter, HTTPException
 import requests
+from services.todoist import get_todoist_service
+
+@router.post("/sync_update_labels")
+async def sync_update_labels(
+    data: LabelUpdateInput,
+    todoist: TodoistService = Depends(get_todoist_service)
+):
+    return await todoist.sync_update_labels(data.task_id, data.labels)
 
 @router.post("/update_labels")
 def update_labels(data: LabelUpdateInput):
@@ -207,14 +218,14 @@ def update_labels(data: LabelUpdateInput):
     label_map = {l["name"].strip().lower(): l["id"] for l in label_resp.json()}
     label_ids = [label_map[l.lower()] for l in labels if l.lower() in label_map]
 
-    # Setze neue Labels
-    resp = requests.post(
-        f"{BASE_URL}/tasks/{task_id}/labels",
+    # PATCH-Call an Todoist mit label_ids
+    resp = requests.patch(
+        f"{BASE_URL}/tasks/{task_id}",
         headers=HEADERS,
         json={"label_ids": label_ids},
         timeout=TIMEOUT
     )
-    if resp.status_code != 204:
+    if resp.status_code not in (200, 204):
         raise HTTPException(status_code=500, detail=f"Label-Update fehlgeschlagen ({resp.status_code})")
 
     return {
