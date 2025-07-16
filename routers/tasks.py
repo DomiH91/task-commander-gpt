@@ -1,5 +1,6 @@
 # routers/tasks.py
 
+from typing import List
 import requests
 from fastapi import APIRouter, HTTPException
 from models.schemas import AddTaskInput, UpdateTaskInput, CompleteTaskInput, QuickAddInput
