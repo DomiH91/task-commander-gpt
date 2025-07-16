@@ -387,37 +387,44 @@ def execute_review_response(data: dict):
             errors[str(idx+1)] = "Index außerhalb des review_batch"
             continue
 
-        entry       = batch[idx]
-        task_id     = entry["task_id"]
-        suggestion  = entry["suggested_update"]
-        user_input  = m.group(3).strip().lower()
+        entry = batch[idx]
+        task_id = entry["task_id"]
+        suggestion = entry["suggested_update"]
+        user_input = m.group(3).strip().lower()
 
         if user_input.startswith("skip"):
             skipped.append(str(idx+1))
             continue
 
-        # Baue das Payload für update_task
         payload = {"task_id": task_id}
 
         if user_input.startswith("akzeptieren"):
             payload.update(suggestion)
         else:
-            for f in re.split(r",\\s*", user_input):
+            for f in re.split(r",\s*", user_input):
                 if f.startswith("prio"):
-                    payload["priority"] = int(re.findall(r"\\d+", f)[0])
+                    prio_match = re.findall(r"\d+", f)
+                    if prio_match:
+                        payload["priority"] = int(prio_match[0])
+                    else:
+                        errors[str(idx+1)] = "Fehlende oder ungültige Priorität"
                 elif f.startswith("due"):
-                    ds = re.findall(r"\\d{4}-\\d{2}-\\d{2}", f)
+                    ds = re.findall(r"\d{4}-\d{2}-\d{2}", f)
                     payload["due_string"] = ds[0] if ds else f.replace("due", "").strip()
                 elif f.startswith("project"):
-                    payload["project_name"] = f.split(" ", 1)[1].strip()
+                    parts = f.split(" ", 1)
+                    if len(parts) > 1:
+                        payload["project_name"] = parts[1].strip()
                 elif f.startswith("duration"):
-                    payload["duration_minutes"] = int(re.findall(r"\\d+", f)[0])
+                    dur = re.findall(r"\d+", f)
+                    if dur:
+                        payload["duration_minutes"] = int(dur[0])
+                    else:
+                        errors[str(idx+1)] = "Fehlende oder ungültige Dauer"
 
-        # Ergänze duration_minutes aus Vorschlag (wenn vorhanden)
         if "duration_minutes" in suggestion:
             payload["duration_minutes"] = suggestion["duration_minutes"]
 
-        # Rufe direkt das interne update_task auf
         try:
             inp = UpdateTaskInput(**payload)
             update_task(inp)
