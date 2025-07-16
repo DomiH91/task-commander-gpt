@@ -189,6 +189,22 @@ def update_task(data: UpdateTaskInput):
 
     return {"status": "updated", "task_id": data.task_id, "changes": payload}
 
+@router.post("/update_labels")
+def update_labels(task_id: str, labels: List[str]):
+    label_resp = requests.get(f"{BASE_URL}/labels", headers=HEADERS, timeout=TIMEOUT)
+    label_map = {l["name"].strip().lower(): l["id"] for l in label_resp.json()}
+    label_ids = [label_map[l.lower()] for l in labels if l.lower() in label_map]
+
+    resp = requests.post(
+        f"{BASE_URL}/tasks/{task_id}/labels",
+        headers=HEADERS,
+        json={"label_ids": label_ids},
+        timeout=TIMEOUT
+    )
+    if resp.status_code != 204:
+        raise HTTPException(status_code=500, detail=f"Label-Update fehlgeschlagen ({resp.status_code})")
+    return {"status": "labels_updated", "task_id": task_id, "labels": labels}
+
 @router.get("/get_projects")
 def get_projects():
     resp = requests.get(f"{BASE_URL}/projects", headers=HEADERS, timeout=TIMEOUT)

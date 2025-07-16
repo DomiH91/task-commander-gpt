@@ -65,6 +65,26 @@ class TodoistService:
         )
         r.raise_for_status()
 
+    async def update_labels(self, task_id: str, labels: list[str]):
+        # Schritt 1: Lade Label-IDs von Todoist
+        r_labels = await self.client.get(
+            f"{self.base_url}/labels",
+            headers=self.headers,
+            timeout=self.timeout
+        )
+        r_labels.raise_for_status()
+        label_map = {l["name"].strip().lower(): l["id"] for l in r_labels.json()}
+        label_ids = [label_map[l.lower()] for l in labels if l.lower() in label_map]
+
+        # Schritt 2: Setze neue Labels (überschreibt bestehende)
+        r = await self.client.post(
+            f"{self.base_url}/tasks/{task_id}/labels",
+            headers=self.headers,
+            json={"label_ids": label_ids},
+            timeout=self.timeout
+        )
+        r.raise_for_status()
+
 async def get_todoist_service(
     request: Request,
     config: AppConfig = Depends(),
