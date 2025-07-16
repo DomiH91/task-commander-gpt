@@ -205,7 +205,7 @@ def update_task(data: UpdateTaskInput):
     if not payload:
         raise HTTPException(status_code=400, detail="Keine Felder zum Aktualisieren angegeben")
 
-    resp = requests.post(
+    resp = requests.patch(
         f"{BASE_URL}/tasks/{data.task_id}",
         headers=HEADERS,
         json=payload,
