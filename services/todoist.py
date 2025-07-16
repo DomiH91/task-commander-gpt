@@ -76,9 +76,9 @@ class TodoistService:
         label_map = {l["name"].strip().lower(): l["id"] for l in r_labels.json()}
         label_ids = [label_map[l.lower()] for l in labels if l.lower() in label_map]
 
-        # Schritt 2: Setze neue Labels (überschreibt bestehende)
-        r = await self.client.post(
-            f"{self.base_url}/tasks/{task_id}/labels",
+        # Schritt 2: PATCH statt POST verwenden
+        r = await self.client.patch(
+            f"{self.base_url}/tasks/{task_id}",
             headers=self.headers,
             json={"label_ids": label_ids},
             timeout=self.timeout
